@@ -1,0 +1,27 @@
+#!/bin/bash
+
+set -u
+
+service="byedpi-start.service"
+state_file="/run/byedpi-start-was-active"
+
+case "${1:-}" in
+  pre)
+    if systemctl is-active --quiet "$service"; then
+      : > "$state_file"
+    else
+      rm -f "$state_file"
+    fi
+    ;;
+  post)
+    if [[ -f "$state_file" ]]; then
+      rm -f "$state_file"
+      if command -v nm-online >/dev/null 2>&1; then
+        nm-online --quiet --timeout=30 || true
+      else
+        sleep 3
+      fi
+      systemctl restart "$service"
+    fi
+    ;;
+esac
