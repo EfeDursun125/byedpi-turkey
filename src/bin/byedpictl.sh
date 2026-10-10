@@ -32,6 +32,14 @@ cmd_tun() {
     start_tunneling
     ;;
   stop)
+    # If systemd owns the boot service, stop the unit as well. Otherwise
+    # Restart=on-failure can bring the tunnel back after its processes exit.
+    # ExecStop sets this variable so its own stop command does the real cleanup.
+    if [[ ${BYEDPI_SYSTEMD_STOP:-0} != 1 ]] && command -v systemctl >/dev/null 2>&1 && \
+      systemctl is-active --quiet byedpi-start.service; then
+      systemctl stop byedpi-start.service
+      return
+    fi
     stop_tunneling
     ;;
   restart)
@@ -206,11 +214,14 @@ EOF
 
 change_profile() {
   local was_running=false
-  if [[ -f $PID_DIR/tunnel.pid ]]; then
-    was_running=true
-  fi
+  local managed_by_systemd=false
 
-  if [[ "$was_running" == true ]]; then
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet byedpi-start.service; then
+    was_running=true
+    managed_by_systemd=true
+    systemctl stop byedpi-start.service
+  elif [[ -f $PID_DIR/tunnel.pid ]]; then
+    was_running=true
     stop_tunneling
   fi
 
@@ -227,7 +238,11 @@ change_profile() {
       echo "Mevcut profiller:"
       ls "$CONF_DIR/profiles/"*.conf 2>/dev/null | xargs -n 1 basename | sed 's/\.conf$//'
       if [[ "$was_running" == true ]]; then
-        start_tunneling
+        if [[ "$managed_by_systemd" == true ]]; then
+          systemctl start byedpi-start.service
+        else
+          start_tunneling
+        fi
       fi
       exit 1
     fi
@@ -260,13 +275,17 @@ change_profile() {
             echo "    Açıklama: $description"
           fi
           echo
-          ((counter++))
+          counter=$((counter + 1))
         fi
       done
     else
       echo "Hata: Profil dizini bulunamadı: $profiles_dir"
       if [[ "$was_running" == true ]]; then
-        start_tunneling
+        if [[ "$managed_by_systemd" == true ]]; then
+          systemctl start byedpi-start.service
+        else
+          start_tunneling
+        fi
       fi
       exit 1
     fi
@@ -274,7 +293,11 @@ change_profile() {
     if [[ ${#profile_files[@]} -eq 0 ]]; then
       echo "Hata: Hiç profil bulunamadı!"
       if [[ "$was_running" == true ]]; then
-        start_tunneling
+        if [[ "$managed_by_systemd" == true ]]; then
+          systemctl start byedpi-start.service
+        else
+          start_tunneling
+        fi
       fi
       exit 1
     fi
@@ -300,14 +323,22 @@ change_profile() {
   else
     echo "HATA: $profile_file bulunamadı!"
     if [[ "$was_running" == true ]]; then
-      start_tunneling
+      if [[ "$managed_by_systemd" == true ]]; then
+        systemctl start byedpi-start.service
+      else
+        start_tunneling
+      fi
     fi
     exit 1
   fi
 
   if [[ "$was_running" == true ]]; then
     echo "Tunnel yeniden başlatılıyor..."
-    start_tunneling
+    if [[ "$managed_by_systemd" == true ]]; then
+      systemctl start byedpi-start.service
+    else
+      start_tunneling
+    fi
   fi
 }
 
