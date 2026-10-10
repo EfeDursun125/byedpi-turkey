@@ -7,6 +7,7 @@ SRC_BIN="$SRC/bin"
 SRC_XDG="$SRC/xdg"
 SRC_IMG="$SRC/img"
 SRC_ICON="$SRC_IMG/icons"
+SLEEP_HOOK="/usr/lib/systemd/system-sleep/byedpi-turkey"
 
 CONF="/etc/byedpictl"
 BIN="/usr/local/bin"
@@ -77,6 +78,10 @@ cmd_install () {
     xdg-desktop-menu install --novendor "$SRC_XDG/byedpictl.desktop"
     xdg-icon-resource install --novendor --size 128 "$SRC_ICON/128/byedpictl.png"
 
+    if [[ -d /usr/lib/systemd/system-sleep ]]; then
+        install -m 755 "$SRC/byedpi-system-sleep" "$SLEEP_HOOK"
+    fi
+
     printf "${C_GREEN}Installation complete${C_RESET}\n"
     cat <<EOF
 
@@ -100,6 +105,7 @@ cmd_remove () {
     id -u byedpi &>/dev/null && userdel byedpi
     xdg-desktop-menu uninstall "$SRC_XDG/byedpictl.desktop"
     xdg-icon-resource uninstall --size 128 "$SRC_ICON/128/byedpictl.png"
+    rm -f "$SLEEP_HOOK"
 
     printf "${C_GREEN}Done${C_RESET}\n"
 }
